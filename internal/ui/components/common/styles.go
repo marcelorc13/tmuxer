@@ -24,10 +24,22 @@ var (
 	HelpBarStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#9CA3AF"))
 
+	HelpBarDescStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#9CA3AF")).
+			Italic(true)
+
 	ErrorText = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#EF4444"))
 
 	Title = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#A78BFA"))
+
+	PanelActive = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("#7C3AED"))
+
+	PanelInactive = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("#374151"))
 )

@@ -23,7 +23,7 @@ type Hint struct {
 func (h HelpBar) View(hints []Hint) string {
 	parts := make([]string, 0, len(hints))
 	for _, hint := range hints {
-		parts = append(parts, common.HelpBarStyle.Render(hint.Key+" "+hint.Desc))
+		parts = append(parts, common.HelpBarDescStyle.Render(hint.Key)+" "+common.HelpBarStyle.Render(hint.Desc))
 	}
-	return strings.Join(parts, common.HelpBarStyle.Render("  ·  "))
+	return strings.Join(parts, common.HelpBarStyle.Render(" · "))
 }
