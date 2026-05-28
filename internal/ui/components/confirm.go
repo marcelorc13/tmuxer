@@ -2,7 +2,7 @@ package components
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"github.com/marceloramalhoc/tmux-tui/internal/ui/components/common"
+	"github.com/marcelorc13/tmuxer/internal/ui/components/common"
 )
 
 // ConfirmedMsg is sent when the user confirms the action.

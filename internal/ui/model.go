@@ -10,9 +10,9 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/marceloramalhoc/tmux-tui/internal/tmux"
-	"github.com/marceloramalhoc/tmux-tui/internal/ui/components"
-	"github.com/marceloramalhoc/tmux-tui/internal/ui/components/common"
+	"github.com/marcelorc13/tmuxer/internal/tmux"
+	"github.com/marcelorc13/tmuxer/internal/ui/components"
+	"github.com/marcelorc13/tmuxer/internal/ui/components/common"
 )
 
 type viewState int

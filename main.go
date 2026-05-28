@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/marceloramalhoc/tmux-tui/internal/ui"
+	"github.com/marcelorc13/tmuxer/internal/ui"
 )
 
 func main() {

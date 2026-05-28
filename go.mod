@@ -1,4 +1,4 @@
-module github.com/marceloramalhoc/tmux-tui
+module github.com/marcelorc13/tmuxer
 
 go 1.26.3
 

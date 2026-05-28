@@ -4,7 +4,7 @@ package components
 import (
 	"strings"
 
-	"github.com/marceloramalhoc/tmux-tui/internal/ui/components/common"
+	"github.com/marcelorc13/tmuxer/internal/ui/components/common"
 )
 
 // HelpBar renders a one-line key hint bar.
