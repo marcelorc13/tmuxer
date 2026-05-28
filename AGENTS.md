@@ -76,6 +76,8 @@ func (s Spinner) Update(msg tea.Msg) (Spinner, tea.Cmd) { ... }
 
 **Tmux commands**: run via `exec.Command("tmux", ...)` returning `tea.Cmd` (wraps in goroutine). Result comes back as a custom `Msg` type — never block in `Update`.
 
+**Tmux documentation**: authoritative reference is https://man.openbsd.org/tmux — use it when adding new tmux commands, checking flag semantics, or verifying format specifiers (`#{...}`). Each function in `internal/tmux/tmux.go` links to its relevant section. Target syntax: `session:window.pane` (e.g., `main:0.1`).
+
 **Msgs vs Cmds**: `Msg` = data arriving (event/result); `Cmd` = function that produces a future `Msg`. Return `nil` Cmd when no async work needed. Use `tea.Batch` to fan out multiple commands.
 
 **Navigation**: root model holds `activeView` enum; views delegate up via `Msg` types to trigger screen transitions.
