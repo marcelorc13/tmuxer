@@ -1,5 +1,5 @@
-// Package session provides the session list view.
-package session
+// Package ui provides the top-level BubbleTea model.
+package ui
 
 import (
 	"fmt"
@@ -9,7 +9,6 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/marceloramalhoc/tmux-tui/internal/tmux"
 	"github.com/marceloramalhoc/tmux-tui/internal/ui/components"
@@ -36,25 +35,23 @@ const (
 	focusWindow
 )
 
-// AttachRequestMsg is sent to the root model when the user wants to attach to a session.
-type AttachRequestMsg struct{ Name string }
-
-// Model is the session list view.
+// Model is the top-level BubbleTea model.
 type Model struct {
-	sessions     []tmux.Session
-	cursor       int
-	windows      []tmux.Window
-	windowCursor int
-	focus        focusPanel
-	state        viewState
-	textInput    *textinput.Model
-	confirm      components.ConfirmModal
-	err          error
-	width        int
-	height       int
+	sessions      []tmux.Session
+	cursor        int
+	windows       []tmux.Window
+	windowCursor  int
+	focus         focusPanel
+	state         viewState
+	textInput     *textinput.Model
+	confirm       components.ConfirmModal
+	err           error
+	width         int
+	height        int
+	PendingAttach func()
 }
 
-// NewModel creates a session list Model.
+// NewModel creates a Model ready to run.
 func NewModel() Model {
 	ti := textinput.New()
 	ti.CharLimit = 64
@@ -72,7 +69,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles messages and returns the updated model and any commands.
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -239,7 +236,8 @@ func (m Model) handleSessionKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	case key.Matches(msg, common.Keys.Attach):
 		if len(m.sessions) > 0 {
 			name := m.sessions[m.cursor].Name
-			return m, func() tea.Msg { return AttachRequestMsg{Name: name} }
+			m.PendingAttach = tmux.AttachFunc(name)
+			return m, tea.Quit
 		}
 
 	case key.Matches(msg, common.Keys.New):
@@ -288,10 +286,11 @@ func (m Model) handleWindowKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	case key.Matches(msg, common.Keys.Bottom):
 		m.windowCursor = max(0, len(m.windows)-1)
 
-	case key.Matches(msg, common.Keys.Enter):
+	case key.Matches(msg, common.Keys.Attach):
 		if len(m.sessions) > 0 && len(m.windows) > 0 {
 			target := m.sessions[m.cursor].Name + ":" + strconv.Itoa(m.windows[m.windowCursor].Index)
-			return m, func() tea.Msg { return AttachRequestMsg{Name: target} }
+			m.PendingAttach = tmux.AttachFunc(target)
+			return m, tea.Quit
 		}
 
 	case key.Matches(msg, common.Keys.New):
@@ -318,7 +317,7 @@ func (m Model) handleWindowKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			m.confirm = m.confirm.Show(prompt)
 		}
 
-	case key.Matches(msg, common.Keys.FocusPrev), key.Matches(msg, common.Keys.Esc):
+	case key.Matches(msg, common.Keys.FocusPrev):
 		m.focus = focusSession
 
 	case key.Matches(msg, common.Keys.Quit):
@@ -390,142 +389,4 @@ func (m Model) handleWindowRenameInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		*m.textInput = updated
 		return m, cmd
 	}
-}
-
-// View renders the session list screen as a split panel.
-func (m Model) View() string {
-	if m.state == stateConfirmingKill || m.state == stateConfirmingKillWindow {
-		return common.Title.Render("Sessions") + "\n\n" + m.confirm.View()
-	}
-
-	// Equal halves; border takes 2 chars (left+right) per panel.
-	half := m.width / 2
-	innerWidth := max(0, half-2)
-
-	leftStyle := common.PanelInactive.Width(innerWidth)
-	rightStyle := common.PanelInactive.Width(innerWidth)
-	if m.focus == focusSession {
-		leftStyle = common.PanelActive.Width(innerWidth)
-	} else {
-		rightStyle = common.PanelActive.Width(innerWidth)
-	}
-
-	left := m.renderSessionPanel(innerWidth)
-	right := m.renderWindowPanel(innerWidth)
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftStyle.Render(left), rightStyle.Render(right))
-}
-
-func (m Model) renderSessionPanel(width int) string {
-	var sb strings.Builder
-
-	sb.WriteString(common.Title.Render("Sessions") + "\n\n")
-
-	for i, s := range m.sessions {
-		indicator := common.StatusDetached.Render("")
-		if s.Attached {
-			indicator = common.StatusAttached.Render("*")
-		}
-
-		var row string
-		if m.state == stateRenaming && i == m.cursor {
-			cursor := common.SessionSelected.Render("> ")
-			row = fmt.Sprintf("%s%s %s", cursor, indicator, m.textInput.View())
-		} else if i == m.cursor {
-			cursor := common.SessionSelected.Render("> ")
-			name := common.SessionSelected.Render(s.Name)
-			row = fmt.Sprintf("%s%s %s", cursor, indicator, name)
-		} else {
-			row = fmt.Sprintf("  %s %s", indicator, s.Name)
-		}
-		sb.WriteString(row + "\n")
-	}
-
-	if len(m.sessions) == 0 && m.state == stateNormal {
-		sb.WriteString(common.SessionNormal.Render("no sessions") + "\n")
-	}
-
-	if m.state == stateCreatingNew {
-		sb.WriteString("\nNew session: " + m.textInput.View() + "\n")
-	}
-
-	if m.err != nil {
-		sb.WriteString("\n" + common.ErrorText.Render(m.err.Error()) + "\n")
-	}
-
-	_ = width
-
-	hints := []components.Hint{
-		{Key: "↑/k ↓/j", Desc: "navigate"},
-		{Key: "l", Desc: "windows"},
-		{Key: "a", Desc: "attach"},
-		{Key: "n", Desc: "new"},
-		{Key: "r", Desc: "rename"},
-		{Key: "d", Desc: "kill"},
-		{Key: "q", Desc: "quit"},
-	}
-	sb.WriteString("\n")
-	sb.WriteString(components.NewHelpBar().View(hints))
-
-	return sb.String()
-}
-
-func (m Model) renderWindowPanel(width int) string {
-	var sb strings.Builder
-
-	sb.WriteString(common.Title.Render("Windows") + "\n\n")
-
-	if len(m.sessions) == 0 {
-		sb.WriteString(common.SessionNormal.Render("no session selected") + "\n")
-	} else if len(m.windows) == 0 && m.state != stateCreatingNewWindow {
-		sb.WriteString(common.SessionNormal.Render("no windows") + "\n")
-	} else {
-		for i, w := range m.windows {
-			indicator := " "
-			if w.Active {
-				indicator = common.StatusAttached.Render("*")
-			}
-
-			label := fmt.Sprintf("%d: %s", w.Index, w.Name)
-			var row string
-			if i == m.windowCursor && m.focus == focusWindow {
-				if m.state == stateRenamingWindow {
-					cursor := common.SessionSelected.Render("> ")
-					row = fmt.Sprintf("%s%s %d: %s", cursor, indicator, w.Index, m.textInput.View())
-				} else {
-					cursor := common.SessionSelected.Render("> ")
-					name := common.SessionSelected.Render(label)
-					row = fmt.Sprintf("%s%s %s", cursor, indicator, name)
-				}
-			} else if i == m.windowCursor {
-				cursor := common.SessionSelected.Render("> ")
-				row = fmt.Sprintf("%s%s %s", cursor, indicator, label)
-			} else {
-				row = fmt.Sprintf("  %s %s", indicator, label)
-			}
-			sb.WriteString(row + "\n")
-		}
-	}
-
-	if m.state == stateCreatingNewWindow {
-		sb.WriteString("\nNew window: " + m.textInput.View() + "\n")
-	}
-
-	_ = width
-
-	if m.focus == focusWindow {
-		hints := []components.Hint{
-			{Key: "↑/k ↓/j", Desc: "navigate"},
-			{Key: "enter/a", Desc: "attach"},
-			{Key: "n", Desc: "new"},
-			{Key: "r", Desc: "rename"},
-			{Key: "d", Desc: "kill"},
-			{Key: "h/esc", Desc: "back"},
-			{Key: "q", Desc: "quit"},
-		}
-		sb.WriteString("\n")
-		sb.WriteString(components.NewHelpBar().View(hints))
-	}
-
-	return sb.String()
 }

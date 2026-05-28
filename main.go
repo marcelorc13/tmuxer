@@ -9,13 +9,12 @@ import (
 )
 
 func main() {
-	root := ui.NewRootModel()
-	p := tea.NewProgram(root)
+	p := tea.NewProgram(ui.NewModel())
 	finalModel, err := p.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
-	if rm, ok := finalModel.(ui.RootModel); ok && rm.PendingAttach != nil {
-		rm.PendingAttach()
+	if m, ok := finalModel.(ui.Model); ok && m.PendingAttach != nil {
+		m.PendingAttach()
 	}
 }
