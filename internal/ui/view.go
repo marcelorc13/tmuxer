@@ -13,6 +13,10 @@ import (
 
 // View renders the active screen.
 func (m Model) View() tea.View {
+	if m.activeScreen == screenResurrect {
+		return m.subView(m.resurrectView.View(), "Resurrect Saves")
+	}
+
 	var content string
 	if m.state == stateConfirmingKill || m.state == stateConfirmingKillWindow {
 		content = common.Title.Render("Sessions") + "\n\n" + m.confirm.View()
@@ -40,6 +44,28 @@ func (m Model) View() tea.View {
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
+}
+
+// subView wraps a sub-view's string content in a full-screen tea.View with a tab bar.
+func (m Model) subView(content, activeTab string) tea.View {
+	tabBar := renderTabBar(activeTab)
+	v := tea.NewView(tabBar + "\n" + content)
+	v.AltScreen = true
+	return v
+}
+
+// renderTabBar renders a one-line navigation tab bar showing the active screen.
+func renderTabBar(active string) string {
+	tabs := []string{"Sessions", "Resurrect Saves"}
+	var parts []string
+	for _, t := range tabs {
+		if t == active {
+			parts = append(parts, common.SessionSelected.Render("[ "+t+" ]"))
+		} else {
+			parts = append(parts, common.StatusDetached.Render("  "+t+"  "))
+		}
+	}
+	return strings.Join(parts, "")
 }
 
 func (m Model) renderSessionPanel(height int) string {
@@ -86,6 +112,7 @@ func (m Model) renderSessionPanel(height int) string {
 		{Key: "n", Desc: "new"},
 		{Key: "r", Desc: "rename"},
 		{Key: "d", Desc: "kill"},
+		{Key: "R", Desc: "resurrect"},
 		{Key: "q", Desc: "quit"},
 	}
 	hintsStr := components.NewHelpBar().View(hints)

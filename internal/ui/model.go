@@ -13,6 +13,17 @@ import (
 	"github.com/marcelorc13/tmuxer/internal/tmux"
 	"github.com/marcelorc13/tmuxer/internal/ui/components"
 	"github.com/marcelorc13/tmuxer/internal/ui/components/common"
+	resurrectview "github.com/marcelorc13/tmuxer/internal/ui/views/resurrect"
+	"github.com/marcelorc13/tmuxer/internal/ui/uimsgs"
+)
+
+type screenType int
+
+const (
+	screenSessions  screenType = iota
+	screenResurrect            // resurrect saves browser
+	screenTemplates            // templates browser (Phase 4)
+	screenWizard               // template creation wizard (Phase 6)
 )
 
 type viewState int
@@ -37,6 +48,9 @@ const (
 
 // Model is the top-level BubbleTea model.
 type Model struct {
+	activeScreen screenType
+
+	// sessions screen state
 	sessions      []tmux.Session
 	cursor        int
 	windows       []tmux.Window
@@ -49,6 +63,9 @@ type Model struct {
 	width         int
 	height        int
 	PendingAttach func()
+
+	// sub-view models
+	resurrectView resurrectview.Model
 }
 
 // NewModel creates a Model ready to run.
@@ -70,6 +87,21 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles messages and returns the updated model and any commands.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Always capture window size.
+	if ws, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width, m.height = ws.Width, ws.Height
+		if m.activeScreen == screenResurrect {
+			m.resurrectView, _ = m.resurrectView.Update(ws)
+		}
+		return m, nil
+	}
+
+	// Route to active sub-view.
+	if m.activeScreen == screenResurrect {
+		return m.updateResurrect(msg)
+	}
+
+	// Sessions screen.
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -262,6 +294,11 @@ func (m Model) handleSessionKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			m.confirm = m.confirm.Show(prompt)
 		}
 
+	case key.Matches(msg, common.Keys.Resurrect):
+		m.activeScreen = screenResurrect
+		m.resurrectView = resurrectview.New(m.width, m.height)
+		return m, m.resurrectView.Init()
+
 	case key.Matches(msg, common.Keys.Quit):
 		return m, tea.Quit
 	}
@@ -357,6 +394,18 @@ func (m Model) handleTextInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// updateResurrect delegates to the resurrect sub-view and handles its outbound msgs.
+func (m Model) updateResurrect(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case uimsgs.BackMsg, tmux.ResurrectRestoredMsg:
+		m.activeScreen = screenSessions
+		return m, tmux.ListSessions()
+	}
+	var cmd tea.Cmd
+	m.resurrectView, cmd = m.resurrectView.Update(msg)
+	return m, cmd
 }
 
 func (m Model) handleWindowRenameInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
