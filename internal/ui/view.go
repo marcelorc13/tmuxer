@@ -19,6 +19,9 @@ func (m Model) View() tea.View {
 	if m.activeScreen == screenTemplates {
 		return m.subView(m.templatesView.View(), "Templates")
 	}
+	if m.activeScreen == screenWizard {
+		return m.subView(m.wizardView.View(), "New Template")
+	}
 
 	var content string
 	if m.state == stateConfirmingKill || m.state == stateConfirmingKillWindow {
@@ -59,7 +62,7 @@ func (m Model) subView(content, activeTab string) tea.View {
 
 // renderTabBar renders a one-line navigation tab bar showing the active screen.
 func renderTabBar(active string) string {
-	tabs := []string{"Sessions", "Resurrect Saves", "Templates"}
+	tabs := []string{"Sessions", "Resurrect Saves", "Templates", "New Template"}
 	var parts []string
 	for _, t := range tabs {
 		if t == active {

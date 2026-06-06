@@ -67,8 +67,9 @@ type Model struct {
 	PendingAttach func()
 
 	// sub-view models
-	resurrectView  resurrectview.Model
-	templatesView  templatesview.Model
+	resurrectView resurrectview.Model
+	templatesView templatesview.Model
+	wizardView    templatesview.Wizard
 }
 
 // NewModel creates a Model ready to run.
@@ -93,8 +94,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Always capture window size.
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width, m.height = ws.Width, ws.Height
-		if m.activeScreen == screenResurrect {
+		switch m.activeScreen {
+		case screenResurrect:
 			m.resurrectView, _ = m.resurrectView.Update(ws)
+		case screenTemplates:
+			m.templatesView, _ = m.templatesView.Update(ws)
+		case screenWizard:
+			m.wizardView, _ = m.wizardView.Update(ws)
 		}
 		return m, nil
 	}
@@ -105,6 +111,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.activeScreen == screenTemplates {
 		return m.updateTemplates(msg)
+	}
+	if m.activeScreen == screenWizard {
+		return m.updateWizard(msg)
 	}
 
 	// Sessions screen.
@@ -432,28 +441,52 @@ func (m Model) updateTemplates(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeScreen = screenSessions
 		return m, tmux.ListSessions()
 	}
+	// OpenWizardMsg: switch to wizard screen.
+	if owm, ok := msg.(templatesview.OpenWizardMsg); ok {
+		if len(owm.Draft.Sessions) > 0 {
+			m.wizardView = templatesview.NewWizardFromCapture(owm.Draft, m.width, m.height)
+		} else {
+			m.wizardView = templatesview.NewWizard(m.width, m.height)
+		}
+		m.activeScreen = screenWizard
+		return m, nil
+	}
 	var cmd tea.Cmd
 	m.templatesView, cmd = m.templatesView.Update(msg)
 	return m, cmd
 }
 
-// handleCapture converts a StateCapturedMsg into a Template and switches to
-// the wizard (Phase 6 stub: for now saves directly with a generated name).
+// updateWizard delegates to the wizard and handles its outbound msgs.
+func (m Model) updateWizard(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(uimsgs.BackMsg); ok {
+		// Return to templates browser and refresh list.
+		m.activeScreen = screenTemplates
+		m.templatesView = templatesview.New(m.width, m.height)
+		return m, m.templatesView.Init()
+	}
+	if saved, ok := msg.(templatesview.WizardSavedMsg); ok {
+		_ = saved
+		// Refresh templates list and return to browser.
+		m.activeScreen = screenTemplates
+		m.templatesView = templatesview.New(m.width, m.height)
+		return m, m.templatesView.Init()
+	}
+	var cmd tea.Cmd
+	m.wizardView, cmd = m.wizardView.Update(msg)
+	return m, cmd
+}
+
+// handleCapture converts a StateCapturedMsg into a Template and opens the wizard
+// pre-filled with the captured sessions/windows/dirs.
 func (m Model) handleCapture(msg tmux.StateCapturedMsg) (Model, tea.Cmd) {
 	if msg.Err != nil {
 		m.err = msg.Err
 		return m, nil
 	}
-	// Build a template from the captured state.
 	tpl := capturedTemplate(msg)
-	// Phase 6 will route to the wizard for naming. For now open templates view
-	// after saving so the user can see and rename via the wizard later.
-	m.activeScreen = screenTemplates
-	m.templatesView = templatesview.New(m.width, m.height)
-	return m, tea.Batch(
-		func() tea.Msg { return templatesview.OpenWizardMsg{Draft: tpl} },
-		m.templatesView.Init(),
-	)
+	m.wizardView = templatesview.NewWizardFromCapture(tpl, m.width, m.height)
+	m.activeScreen = screenWizard
+	return m, nil
 }
 
 func (m Model) handleWindowRenameInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
