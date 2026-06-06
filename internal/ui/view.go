@@ -13,14 +13,25 @@ import (
 
 // View renders the active screen.
 func (m Model) View() tea.View {
-	var content string
+	if m.activeScreen == screenResurrect {
+		return m.subView(m.resurrectView.View(), "Resurrect Saves")
+	}
+	if m.activeScreen == screenTemplates {
+		return m.subView(m.templatesView.View(), "Templates")
+	}
+	if m.activeScreen == screenWizard {
+		return m.subView(m.wizardView.View(), "New Template")
+	}
+
+	tabBar := renderTabBar("Sessions")
+	var panels string
 	if m.state == stateConfirmingKill || m.state == stateConfirmingKillWindow {
-		content = common.Title.Render("Sessions") + "\n\n" + m.confirm.View()
+		panels = common.Title.Render("Sessions") + "\n\n" + m.confirm.View()
 	} else {
-		// Each panel: half terminal width, full terminal height. Border = 2 each side.
+		// Each panel: half terminal width. Reserve 1 line for tab bar.
 		leftOuter := m.width / 2
 		rightOuter := m.width - leftOuter
-		innerH := max(0, m.height-3)
+		innerH := max(0, m.height-4)
 		leftInner := max(0, leftOuter-2)
 		rightInner := max(0, rightOuter-2)
 
@@ -34,12 +45,39 @@ func (m Model) View() tea.View {
 
 		left := m.renderSessionPanel(innerH)
 		right := m.renderWindowPanel(innerH)
-		content = lipgloss.JoinHorizontal(lipgloss.Top, leftStyle.Render(left), rightStyle.Render(right))
+		panels = lipgloss.JoinHorizontal(lipgloss.Top, leftStyle.Render(left), rightStyle.Render(right))
 	}
 
-	v := tea.NewView(content)
+	v := tea.NewView(tabBar + "\n" + panels)
 	v.AltScreen = true
 	return v
+}
+
+// subView wraps a sub-view's string content in a full-screen tea.View with a tab bar.
+func (m Model) subView(content, activeTab string) tea.View {
+	tabBar := renderTabBar(activeTab)
+	v := tea.NewView(tabBar + "\n" + content)
+	v.AltScreen = true
+	return v
+}
+
+// renderTabBar renders a one-line navigation tab bar showing the active screen.
+// "New Template" is only shown when the wizard is active (not a cycle target).
+func renderTabBar(active string) string {
+	tabs := []string{"Sessions", "Resurrect Saves", "Templates"}
+	if active == "New Template" {
+		tabs = append(tabs, "New Template")
+	}
+	var parts []string
+	for _, t := range tabs {
+		if t == active {
+			parts = append(parts, common.SessionSelected.Render("[ "+t+" ]"))
+		} else {
+			parts = append(parts, common.StatusDetached.Render("  "+t+"  "))
+		}
+	}
+	tabHint := common.HelpBarStyle.Render("  tab: cycle")
+	return strings.Join(parts, "") + tabHint
 }
 
 func (m Model) renderSessionPanel(height int) string {
@@ -86,6 +124,9 @@ func (m Model) renderSessionPanel(height int) string {
 		{Key: "n", Desc: "new"},
 		{Key: "r", Desc: "rename"},
 		{Key: "d", Desc: "kill"},
+		{Key: "R", Desc: "resurrect"},
+		{Key: "T", Desc: "templates"},
+		{Key: "C", Desc: "capture"},
 		{Key: "q", Desc: "quit"},
 	}
 	hintsStr := components.NewHelpBar().View(hints)

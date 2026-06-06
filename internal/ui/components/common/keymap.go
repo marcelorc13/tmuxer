@@ -17,6 +17,10 @@ type NavKeyMap struct {
 	Rename    key.Binding
 	Kill      key.Binding
 	Esc       key.Binding
+	Resurrect key.Binding
+	Templates key.Binding
+	Capture   key.Binding
+	TabNext   key.Binding
 }
 
 // Keys is the default navigation keymap.
@@ -34,4 +38,8 @@ var Keys = NavKeyMap{
 	Rename:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rename")),
 	Kill:      key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "kill")),
 	Esc:       key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+	Resurrect: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "resurrect")),
+	Templates: key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "templates")),
+	Capture:   key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "capture")),
+	TabNext:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab")),
 }
