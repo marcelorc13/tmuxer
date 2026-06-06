@@ -10,10 +10,12 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/marcelorc13/tmuxer/internal/templates"
 	"github.com/marcelorc13/tmuxer/internal/tmux"
 	"github.com/marcelorc13/tmuxer/internal/ui/components"
 	"github.com/marcelorc13/tmuxer/internal/ui/components/common"
 	resurrectview "github.com/marcelorc13/tmuxer/internal/ui/views/resurrect"
+	templatesview "github.com/marcelorc13/tmuxer/internal/ui/views/templates"
 	"github.com/marcelorc13/tmuxer/internal/ui/uimsgs"
 )
 
@@ -65,7 +67,8 @@ type Model struct {
 	PendingAttach func()
 
 	// sub-view models
-	resurrectView resurrectview.Model
+	resurrectView  resurrectview.Model
+	templatesView  templatesview.Model
 }
 
 // NewModel creates a Model ready to run.
@@ -99,6 +102,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Route to active sub-view.
 	if m.activeScreen == screenResurrect {
 		return m.updateResurrect(msg)
+	}
+	if m.activeScreen == screenTemplates {
+		return m.updateTemplates(msg)
 	}
 
 	// Sessions screen.
@@ -200,6 +206,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = stateNormal
 		return m, nil
 
+	case tmux.StateCapturedMsg:
+		return m.handleCapture(msg)
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
@@ -298,6 +307,14 @@ func (m Model) handleSessionKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		m.activeScreen = screenResurrect
 		m.resurrectView = resurrectview.New(m.width, m.height)
 		return m, m.resurrectView.Init()
+
+	case key.Matches(msg, common.Keys.Templates):
+		m.activeScreen = screenTemplates
+		m.templatesView = templatesview.New(m.width, m.height)
+		return m, m.templatesView.Init()
+
+	case key.Matches(msg, common.Keys.Capture):
+		return m, tmux.CaptureCurrentState()
 
 	case key.Matches(msg, common.Keys.Quit):
 		return m, tea.Quit
@@ -408,6 +425,37 @@ func (m Model) updateResurrect(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateTemplates delegates to the templates sub-view and handles its outbound msgs.
+func (m Model) updateTemplates(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case uimsgs.BackMsg, templatesview.TemplateAppliedMsg:
+		m.activeScreen = screenSessions
+		return m, tmux.ListSessions()
+	}
+	var cmd tea.Cmd
+	m.templatesView, cmd = m.templatesView.Update(msg)
+	return m, cmd
+}
+
+// handleCapture converts a StateCapturedMsg into a Template and switches to
+// the wizard (Phase 6 stub: for now saves directly with a generated name).
+func (m Model) handleCapture(msg tmux.StateCapturedMsg) (Model, tea.Cmd) {
+	if msg.Err != nil {
+		m.err = msg.Err
+		return m, nil
+	}
+	// Build a template from the captured state.
+	tpl := capturedTemplate(msg)
+	// Phase 6 will route to the wizard for naming. For now open templates view
+	// after saving so the user can see and rename via the wizard later.
+	m.activeScreen = screenTemplates
+	m.templatesView = templatesview.New(m.width, m.height)
+	return m, tea.Batch(
+		func() tea.Msg { return templatesview.OpenWizardMsg{Draft: tpl} },
+		m.templatesView.Init(),
+	)
+}
+
 func (m Model) handleWindowRenameInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
@@ -438,4 +486,24 @@ func (m Model) handleWindowRenameInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		*m.textInput = updated
 		return m, cmd
 	}
+}
+
+// capturedTemplate converts a StateCapturedMsg into a Template draft.
+// Window names from tmux are used as-is; dirs come from the captured map.
+func capturedTemplate(msg tmux.StateCapturedMsg) templates.Template {
+	tpl := templates.Template{Name: "captured"}
+	for _, sessName := range msg.Sessions {
+		windows := msg.Windows[sessName]
+		sess := templates.TemplateSession{Name: sessName}
+		for _, w := range windows {
+			key := fmt.Sprintf("%s:%d", sessName, w.Index)
+			dir := msg.Dirs[key]
+			sess.Windows = append(sess.Windows, templates.TemplateWindow{
+				Name: w.Name,
+				Dir:  dir,
+			})
+		}
+		tpl.Sessions = append(tpl.Sessions, sess)
+	}
+	return tpl
 }

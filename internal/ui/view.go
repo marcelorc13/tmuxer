@@ -16,6 +16,9 @@ func (m Model) View() tea.View {
 	if m.activeScreen == screenResurrect {
 		return m.subView(m.resurrectView.View(), "Resurrect Saves")
 	}
+	if m.activeScreen == screenTemplates {
+		return m.subView(m.templatesView.View(), "Templates")
+	}
 
 	var content string
 	if m.state == stateConfirmingKill || m.state == stateConfirmingKillWindow {
@@ -56,7 +59,7 @@ func (m Model) subView(content, activeTab string) tea.View {
 
 // renderTabBar renders a one-line navigation tab bar showing the active screen.
 func renderTabBar(active string) string {
-	tabs := []string{"Sessions", "Resurrect Saves"}
+	tabs := []string{"Sessions", "Resurrect Saves", "Templates"}
 	var parts []string
 	for _, t := range tabs {
 		if t == active {
@@ -113,6 +116,8 @@ func (m Model) renderSessionPanel(height int) string {
 		{Key: "r", Desc: "rename"},
 		{Key: "d", Desc: "kill"},
 		{Key: "R", Desc: "resurrect"},
+		{Key: "T", Desc: "templates"},
+		{Key: "C", Desc: "capture"},
 		{Key: "q", Desc: "quit"},
 	}
 	hintsStr := components.NewHelpBar().View(hints)
