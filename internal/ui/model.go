@@ -105,6 +105,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Tab cycles Sessions → Resurrect → Templates (not in wizard — tab is used there for navigation).
+	if kp, ok := msg.(tea.KeyPressMsg); ok && m.activeScreen != screenWizard {
+		if key.Matches(kp, common.Keys.TabNext) {
+			return m.cycleTab()
+		}
+	}
+
 	// Route to active sub-view.
 	if m.activeScreen == screenResurrect {
 		return m.updateResurrect(msg)
@@ -420,6 +427,23 @@ func (m Model) handleTextInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// cycleTab advances to the next tab: Sessions → Resurrect → Templates → Sessions.
+func (m Model) cycleTab() (tea.Model, tea.Cmd) {
+	switch m.activeScreen {
+	case screenSessions:
+		m.activeScreen = screenResurrect
+		m.resurrectView = resurrectview.New(m.width, m.height)
+		return m, m.resurrectView.Init()
+	case screenResurrect:
+		m.activeScreen = screenTemplates
+		m.templatesView = templatesview.New(m.width, m.height)
+		return m, m.templatesView.Init()
+	default: // screenTemplates
+		m.activeScreen = screenSessions
+		return m, tmux.ListSessions()
+	}
 }
 
 // updateResurrect delegates to the resurrect sub-view and handles its outbound msgs.

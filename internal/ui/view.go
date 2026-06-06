@@ -23,14 +23,15 @@ func (m Model) View() tea.View {
 		return m.subView(m.wizardView.View(), "New Template")
 	}
 
-	var content string
+	tabBar := renderTabBar("Sessions")
+	var panels string
 	if m.state == stateConfirmingKill || m.state == stateConfirmingKillWindow {
-		content = common.Title.Render("Sessions") + "\n\n" + m.confirm.View()
+		panels = common.Title.Render("Sessions") + "\n\n" + m.confirm.View()
 	} else {
-		// Each panel: half terminal width, full terminal height. Border = 2 each side.
+		// Each panel: half terminal width. Reserve 1 line for tab bar.
 		leftOuter := m.width / 2
 		rightOuter := m.width - leftOuter
-		innerH := max(0, m.height-3)
+		innerH := max(0, m.height-4)
 		leftInner := max(0, leftOuter-2)
 		rightInner := max(0, rightOuter-2)
 
@@ -44,10 +45,10 @@ func (m Model) View() tea.View {
 
 		left := m.renderSessionPanel(innerH)
 		right := m.renderWindowPanel(innerH)
-		content = lipgloss.JoinHorizontal(lipgloss.Top, leftStyle.Render(left), rightStyle.Render(right))
+		panels = lipgloss.JoinHorizontal(lipgloss.Top, leftStyle.Render(left), rightStyle.Render(right))
 	}
 
-	v := tea.NewView(content)
+	v := tea.NewView(tabBar + "\n" + panels)
 	v.AltScreen = true
 	return v
 }
@@ -61,8 +62,12 @@ func (m Model) subView(content, activeTab string) tea.View {
 }
 
 // renderTabBar renders a one-line navigation tab bar showing the active screen.
+// "New Template" is only shown when the wizard is active (not a cycle target).
 func renderTabBar(active string) string {
-	tabs := []string{"Sessions", "Resurrect Saves", "Templates", "New Template"}
+	tabs := []string{"Sessions", "Resurrect Saves", "Templates"}
+	if active == "New Template" {
+		tabs = append(tabs, "New Template")
+	}
 	var parts []string
 	for _, t := range tabs {
 		if t == active {
@@ -71,7 +76,8 @@ func renderTabBar(active string) string {
 			parts = append(parts, common.StatusDetached.Render("  "+t+"  "))
 		}
 	}
-	return strings.Join(parts, "")
+	tabHint := common.HelpBarStyle.Render("  tab: cycle")
+	return strings.Join(parts, "") + tabHint
 }
 
 func (m Model) renderSessionPanel(height int) string {

@@ -20,6 +20,7 @@ type NavKeyMap struct {
 	Resurrect key.Binding
 	Templates key.Binding
 	Capture   key.Binding
+	TabNext   key.Binding
 }
 
 // Keys is the default navigation keymap.
@@ -40,4 +41,5 @@ var Keys = NavKeyMap{
 	Resurrect: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "resurrect")),
 	Templates: key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "templates")),
 	Capture:   key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "capture")),
+	TabNext:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab")),
 }
