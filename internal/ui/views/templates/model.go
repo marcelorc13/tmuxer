@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	tmuxcmd "github.com/marcelorc13/tmuxer/internal/tmux"
@@ -21,6 +22,7 @@ const (
 	stateList state = iota
 	stateConfirming
 	stateApplying
+	stateRenaming
 	stateError
 )
 
@@ -38,25 +40,27 @@ type OpenWizardMsg struct{ Draft templates.Template }
 
 // Model is the templates browser.
 type Model struct {
-	items   []templates.Template
-	cursor  int
-	state   state
-	confirm components.ConfirmModal
-	err     error
-	width   int
-	height  int
-
-	// apply progress tracking
-	pending int // commands still in flight
-	applyErr error
+	items    []templates.Template
+	cursor   int
+	state    state
+	confirm  components.ConfirmModal
+	input    textinput.Model
+	err      error
+	width    int
+	height   int
+	pending  int   // apply: commands still in flight
+	applyErr error // apply: first error seen
 }
 
 // New creates a Model ready to use.
 func New(width, height int) Model {
+	ti := textinput.New()
+	ti.CharLimit = 64
 	return Model{
 		width:   width,
 		height:  height,
 		confirm: components.NewConfirmModal(),
+		input:   ti,
 	}
 }
 
@@ -138,6 +142,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if m.state == stateRenaming {
+		return m.handleRenameInput(msg)
+	}
+
 	switch {
 	case key.Matches(msg, common.Keys.Up):
 		if m.cursor > 0 {
@@ -170,6 +178,15 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			m.state = stateConfirming
 		}
 
+	case key.Matches(msg, common.Keys.Rename):
+		if len(m.items) > 0 && m.state == stateList {
+			m.state = stateRenaming
+			m.input.Reset()
+			m.input.SetValue(m.items[m.cursor].Name)
+			m.input.CursorEnd()
+			m.input.Focus()
+		}
+
 	case key.Matches(msg, common.Keys.New):
 		if m.state == stateList {
 			return m, openWizard(templates.Template{})
@@ -190,6 +207,38 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, back()
 	}
 	return m, nil
+}
+
+func (m Model) handleRenameInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		newName := strings.TrimSpace(m.input.Value())
+		m.input.Blur()
+		m.state = stateList
+		if newName == "" || m.cursor >= len(m.items) {
+			return m, nil
+		}
+		oldName := m.items[m.cursor].Name
+		if newName == oldName {
+			return m, nil
+		}
+		if err := templates.Rename(oldName, newName); err != nil {
+			m.err = err
+			m.state = stateError
+			return m, nil
+		}
+		return m, loadTemplates()
+
+	case "esc":
+		m.input.Blur()
+		m.state = stateList
+		return m, nil
+
+	default:
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
+	}
 }
 
 // View renders the templates browser.
@@ -220,10 +269,14 @@ func (m Model) View() string {
 			if len(t.Sessions) != 1 {
 				sessions += "s"
 			}
-			line := fmt.Sprintf("%-24s  %s", t.Name, sessions)
-			if i == m.cursor {
+			if i == m.cursor && m.state == stateRenaming {
+				cursor := common.SessionSelected.Render("> ")
+				b.WriteString(fmt.Sprintf("%s%s\n", cursor, m.input.View()))
+			} else if i == m.cursor {
+				line := fmt.Sprintf("%-24s  %s", t.Name, sessions)
 				b.WriteString(common.SessionSelected.Render("> "+line) + "\n")
 			} else {
+				line := fmt.Sprintf("%-24s  %s", t.Name, sessions)
 				b.WriteString("  " + line + "\n")
 			}
 		}
@@ -233,12 +286,21 @@ func (m Model) View() string {
 	bodyStr := b.String()
 	bodyLines := strings.Count(bodyStr, "\n")
 
-	hints := []components.Hint{
-		{Key: "↑/k ↓/j", Desc: "navigate"},
-		{Key: "enter", Desc: "apply"},
-		{Key: "n", Desc: "new"},
-		{Key: "d", Desc: "delete"},
-		{Key: "esc/q", Desc: "back"},
+	var hints []components.Hint
+	if m.state == stateRenaming {
+		hints = []components.Hint{
+			{Key: "enter", Desc: "confirm"},
+			{Key: "esc", Desc: "cancel"},
+		}
+	} else {
+		hints = []components.Hint{
+			{Key: "↑/k ↓/j", Desc: "navigate"},
+			{Key: "enter", Desc: "apply"},
+			{Key: "r", Desc: "rename"},
+			{Key: "n", Desc: "new"},
+			{Key: "d", Desc: "delete"},
+			{Key: "esc/q", Desc: "back"},
+		}
 	}
 	hintsStr := components.NewHelpBar().View(hints)
 	hintLines := strings.Count(hintsStr, "\n") + 1

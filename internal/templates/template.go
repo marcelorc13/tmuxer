@@ -139,6 +139,23 @@ func ListAll() ([]Template, error) {
 	return out, nil
 }
 
+// Rename loads a template by oldName, saves it under newName, then deletes the
+// old file. Both names must be non-empty and distinct.
+func Rename(oldName, newName string) error {
+	if oldName == newName || newName == "" {
+		return nil
+	}
+	t, err := Load(oldName)
+	if err != nil {
+		return err
+	}
+	t.Name = newName
+	if err := Save(t); err != nil {
+		return err
+	}
+	return Delete(oldName)
+}
+
 // Delete removes a template from the user templates directory.
 func Delete(name string) error {
 	dir, err := UserTemplatesDir()
