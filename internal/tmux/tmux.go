@@ -77,6 +77,17 @@ type PaneSplitMsg struct{ Err error }
 // PaneKilledMsg carries the result of KillPane.
 type PaneKilledMsg struct{ Err error }
 
+// PaneDirMsg carries the result of GetPaneDir.
+type PaneDirMsg struct {
+	Session string
+	Window  int
+	Dir     string
+	Err     error
+}
+
+// KeysSentMsg carries the result of SendKeys.
+type KeysSentMsg struct{ Err error }
+
 // ListSessions returns a Cmd that lists all tmux sessions.
 // Docs: https://man.openbsd.org/tmux#list-sessions
 func ListSessions() tea.Cmd {
@@ -231,6 +242,51 @@ func KillPane(session string, windowIndex, paneIndex int) tea.Cmd {
 		target := session + ":" + strconv.Itoa(windowIndex) + "." + strconv.Itoa(paneIndex)
 		err := exec.Command("tmux", "kill-pane", "-t", target).Run()
 		return PaneKilledMsg{Err: err}
+	}
+}
+
+// NewWindowWithDir returns a Cmd that creates a new window starting in dir.
+// If name is empty, tmux uses the default name.
+// Docs: https://man.openbsd.org/tmux#new-window
+func NewWindowWithDir(session, name, dir string) tea.Cmd {
+	return func() tea.Msg {
+		args := []string{"new-window", "-d", "-t", session}
+		if name != "" {
+			args = append(args, "-n", name)
+		}
+		if dir != "" {
+			args = append(args, "-c", dir)
+		}
+		err := exec.Command("tmux", args...).Run()
+		return WindowCreatedMsg{Err: err}
+	}
+}
+
+// SendKeys sends keys to a target pane (session:window or session:window.pane).
+// Docs: https://man.openbsd.org/tmux#send-keys
+func SendKeys(target, keys string) tea.Cmd {
+	return func() tea.Msg {
+		err := exec.Command("tmux", "send-keys", "-t", target, keys, "Enter").Run()
+		return KeysSentMsg{Err: err}
+	}
+}
+
+// GetPaneDir returns a Cmd that fetches the working directory of the first pane
+// in the given session:window.
+// Docs: https://man.openbsd.org/tmux#display-message
+func GetPaneDir(session string, windowIndex int) tea.Cmd {
+	return func() tea.Msg {
+		target := session + ":" + strconv.Itoa(windowIndex)
+		out, err := exec.Command("tmux", "display-message", "-p", "-t", target,
+			"#{pane_current_path}").Output()
+		if err != nil {
+			return PaneDirMsg{Session: session, Window: windowIndex, Err: err}
+		}
+		return PaneDirMsg{
+			Session: session,
+			Window:  windowIndex,
+			Dir:     strings.TrimSpace(string(out)),
+		}
 	}
 }
 
