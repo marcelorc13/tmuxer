@@ -178,6 +178,7 @@ func (m Model) View() string {
 
 	hints := []components.Hint{
 		{Key: "↑/k ↓/j", Desc: "navigate"},
+		{Key: "g/G", Desc: "top/bottom"},
 		{Key: "enter", Desc: "restore"},
 		{Key: "esc/q", Desc: "back"},
 	}
